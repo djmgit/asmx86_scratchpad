@@ -3,10 +3,9 @@
 ; Run with: ./<file_name>
 
 ; This code uses a very crude logic to split the words of a sentence into different lines.
-; It assumes that the words are separated by single space only.
  
 SECTION .data
-msg1    db      'Hello world        from ASM X86 powered by NASM', 0h          ; NOTE the null terminating byte
+msg1    db      'Hello world from ASM X86 powered by NASM', 0h          ; NOTE the null terminating byte
  
 SECTION .text
 global  _start
@@ -65,7 +64,11 @@ wtokenize:
     pop eax         ; retsore the end of the previous word in eax
     cmp byte[eax], 0
     jz .finished
+
+.bypass_all_whitespaces:
     inc eax         ; increment eax to point to the beginning of the next word
+    cmp byte[eax], 20h  ; check if next byte is whitespace as well, if so we need to skip it
+    jz .bypass_all_whitespaces
     mov ebx, eax    ; set ebx to start of the next word
     jmp .nextchar   ; repeat the parsing process
 
