@@ -2,87 +2,78 @@
 ; Link with (64 bit systems require elf_i386 option): ld -m elf_i386 <file_name>.o -o <file_name>
 ; Run with: ./<file_name>
 
-; Read a file byte by byte and print to stdout
- 
-SECTION .data
-msg1    db      'Hello world from ASM X86 powered by NASM', 0h          ; NOTE the null terminating byte
+; This code reads a file byte by byte and prints it to stdout
  
 SECTION .text
 global  _start
  
 _start:
  
-    mov     eax, msg1
-    call    wtokenize
- 
-    call    quit
+    mov     eax, file_name   ; move adress of file_name to eax
+    call    read_file    ; call readfile routine
+    call    quit    ; quit program
 
 ;----------------------------------------------
-; void wtokenise(String message)
-; Function to space split a string and print each word in a new line.
-wtokenize:
-    push edx
-    push ecx
-    push ebx
-    push eax
-    mov ebx, eax
-.nextchar:
 
-    ; parse the string, if we encounter whitespace (hex 20h) then we have found the end of the current word
-    cmp byte [eax], 20h
-    jz .newword
-    cmp byte [eax], 0
-    jz .newword
-    inc eax
-    jmp .nextchar
+read_file:
+    push eax                                ; save eax for later restore
+    mov ecx, 0                              ; open file in readonly mode
+    mov ebx, eax                            ; put file_name address in ebx
+    mov eax, 5                              ; move sys_call number of sys_open to eax
+    int 80h                                 ; invoke kernal
+    mov [fd_in], eax                        ; move the file descriptor to memory
+    mov [bytecount], dword 0h               ; initialise bytecount with 0
 
-.newword:
+.set_seek_offset:
+    mov edx, 0                              ; We want to read the file from the start, hence 0
+    mov ecx, [bytecount]                    ; the offeset from which we want to read
+    mov ebx, [fd_in]                        ; The file descriptor
+    mov eax, 19                             ; put the sys_call number for sys_lseek in eax
+    int 80h                                 ; invoke kernel
 
-    ; store start and end of the previous word in stack
-    push eax    ; eax = end + 1 of the previous word
-    push ebx    ; ebx = start of the previous word
-    sub eax, ebx    ; store length of the word in eax
+.read_byte:
+    mov edx, 1                              ; we want to read only 1 byte
+    mov ecx, content                        ; the memory location where we want to store the read byte
+    mov ebx, [fd_in]                        ; move file descriptor from memory to ebx
+    mov eax, 3                              ; move sys_call number for sys_read in eax
+    int 80h                                 ; invoke kernel
 
-.printword:
-    mov edx, eax    ; store length of word in edx
-    mov ecx, ebx    ; store start position (address) of the string in ecx
-    mov ebx, 1      ; 1 is std output
-    mov eax, 4      ; 4 is the syscall number for write syscall
-    int 80h         ; call syscall handler
+.eof_check:
 
-    ; print a new line
-    mov eax, 0Ah    ; mov 0Ah (new line in hex) to eax
-    push eax        ; save eax on stack
-    mov edx, 1      ; store 1 in edx, because thats the length of the string (newline) we are going to print
-    mov ecx, esp    ; move starting postion (address) of the string to ecx which is basically stack pointer
-    mov ebx, 1      ; move std out to ebx
-    mov eax, 4      ; same as before
-    int 80h         
-    
-    pop eax         ; pop eax once to get rid of the 0Ah from stack
-    pop ebx         ; restore the start of the previous word in ebx
-    pop eax         ; retsore the end of the previous word in eax
-    cmp byte[eax], 0
-    jz .finished
+    ; we need to check if we have reached eof. That is on further increasing lseek's offset,
+    ; read syscall will return error code.
+    cmp eax, 0                              ; check if we have non positive integer in eax  
+    je .close_file                          ; if yes, then jump to .close_file and end
+    add dword[bytecount], eax               ; otherwise increment bytecount with number of bytes read which should be 1 in our case
 
-.bypass_all_whitespaces:
-    inc eax         ; increment eax to point to the beginning of the next word
-    cmp byte[eax], 20h  ; check if next byte is whitespace as well, if so we need to skip it
-    jz .bypass_all_whitespaces
-    mov ebx, eax    ; set ebx to start of the next word
-    jmp .nextchar   ; repeat the parsing process
+.print_byte:                                
+    mov edx, 1                              ; we want to print only 1 byte
+    mov ecx, content                        ; move memory location of content in ecx
+    mov ebx, 1                              ; we want to print to stdout
+    mov eax, 4                              ; move sys call number for sys_write in eax
+    int 80h                                 ; invoke kernel
+    jmp .set_seek_offset                    ; loop
 
-.finished:
+.close_file:                                
+    mov ebx, [fd_in]                        ; move memory location of file descriptor to ebx
+    mov eax, 6                              ; move sys_call number for sys_close to eax
+    int 80h                                 ; invoke kernel
 
-    ; restore the early state of all the registers we used
-    pop eax         
-    pop ebx
-    pop ecx
-    pop edx
-    ret
+.finshed:
+    pop eax                                 ; restore eax
+    ret                                     ; return from function
 
+; routine to quit the program
 quit:
     mov     ebx, 0
     mov     eax, 1
     int     80h
     ret
+
+SECTION .data
+file_name db 'test_file.txt'                ; memory variable from name of the file
+
+SECTION .bss            
+fd_in resd 1                                ; varibale from file descriptor
+content resb 1                              ; variable from content
+bytecount resd 1                            ; variable for bytecount
