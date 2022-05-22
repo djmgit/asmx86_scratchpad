@@ -55,7 +55,7 @@ read_file:
     jmp .set_seek_offset                    ; loop
 
 .close_file:                                
-    mov ebx, [fd_in]                        ; move memory location of file descriptor to ebx
+    mov ebx, [fd_in]                        ; move file descriptor to ebx
     mov eax, 6                              ; move sys_call number for sys_close to eax
     int 80h                                 ; invoke kernel
 
